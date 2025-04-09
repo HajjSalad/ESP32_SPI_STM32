@@ -10,6 +10,7 @@
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "sdkconfig.h"
+#include "esp_log.h"
 
 #define MOSI    23
 #define MISO    19
@@ -25,11 +26,14 @@ void spi_init ()
         .miso_io_num = MISO,
         .mosi_io_num = MOSI,
         .sclk_io_num = SCK,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .max_transfer_sz = 32
     };
 
     // Set SPI device interface
     const spi_device_interface_config_t spi_device_config = {
-        .clock_speed_hz = 1000000,      // Set the clock speed (1 MHz)
+        .clock_speed_hz = 1*1000*1000,  // Set the clock speed (1 MHz)
         .duty_cycle_pos = 128,          // Set the duty cycle, 128 = 50%
         .mode           = 0,            // SPI mode (0: CPOL = 0, CPHA = 0)
         .spics_io_num   = SS,           // Slave Select
@@ -42,23 +46,27 @@ void spi_init ()
 
 static void spi_task()
 {
-    spi_transaction_t t;
-    memset(&t, 0, sizeof(t));
+    uint8_t tx_data[] = "Message from ESP32 Master";  // 25 bytes
+    uint8_t rx_data[26];
 
-    char sendBuffer[30] = {0};
-    char receiveBuffer[30] = {0};
+    while (1) {
+        spi_transaction_t t;
+        memset(&t, 0, sizeof(t));
 
-    while(1)
-    {
-        snprintf(sendBuffer, sizeof(sendBuffer), "Hi I am ESP32");
-        t.length = sizeof(sendBuffer) * 8;
-        t.tx_buffer = sendBuffer;
-        t.rx_buffer = receiveBuffer;
-        spi_device_transmit(handle, &t);
-        printf("Transmitted: %s\n", sendBuffer);
-        printf("Received: %s\n", receiveBuffer);
+        t.length = 8 * sizeof(tx_data);  // 25 bytes * 8 bits
+        t.tx_buffer = tx_data;
+        t.rx_buffer = rx_data;
+
+        esp_err_t ret = spi_device_transmit(handle, &t);
+        if (ret == ESP_OK) {
+            printf("Received: %.*s\n", sizeof(rx_data), rx_data);  // Print as string
+        } else {
+            printf("SPI Transmission Failed\n");
+        }
+
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
+
 }
 
 void app_main(void)
